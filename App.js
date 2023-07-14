@@ -70,7 +70,6 @@ export default function App() {
         const [isModalOpen, setIsModalOpen] = useState(false);
         const [googleContacts, setGoogleContacts] = useState([]);
         const [contactCount, setContactCount] = useState(0); // Initialize to 0 or the initial number of contacts
-        const [nextId, setNextId] = useState(0); // Initialize to 0 or the initial next ID
         const [ text, setText] = useState("Join us in creating a 'Bundl' of loving letters & pics for Dan G. It's a quick, fun way to share our support and appreciation. Look out for an email from dan@givebundl.com with instructions. Don't miss out!");
         const [updateLocalStorageFunction, setUpdateLocalStorageFunction] = useState(() => () => {});
 
@@ -547,32 +546,31 @@ export default function App() {
             console.error('Error:', error);
           });
         };
-
         const handleSelectContact = (contact) => {
           const phoneNumber = contact.phoneNumbers ? contact.phoneNumbers[0].number : '';
           const contactWithPhoneNumber = { ...contact, phoneNumber };
         
-          if (selectedContactsMobile.some((selectedContact) => selectedContact.id === contact.id)) {
-            setSelectedContactsMobile((prev) => prev.filter((selectedContact) => selectedContact.id !== contact.id));
+          if (selectedContactsMobile.some((selectedContact) => selectedContact.name === contact.name && selectedContact.phoneNumber === contact.phoneNumber)) {
+            setSelectedContactsMobile((prev) => prev.filter((selectedContact) => selectedContact.name !== contact.name || selectedContact.phoneNumber !== contact.phoneNumber));
           } else {
             setSelectedContactsMobile((prev) => [...prev, contactWithPhoneNumber]);
           }
         };
-
+        
+        const handleAddToList = () => {
+          setTableData(prev => [...prev, ...selectedContactsMobile]);
+          setSelectedContactsMobile([]);
+          setModalVisible(false);
+        };
         const handleDeleteContact = (contactToDelete) => {
           setTableData((prevTableData) => {
-            return prevTableData.filter(contact => contact !== contactToDelete);
+            return prevTableData.filter(contact => contact.id !== contactToDelete.id);
           });
         };
         
-        
-      const handleAddToList = () => {
-        setTableData((prev) => [...prev, ...selectedContactsMobile]);
-        setSelectedContactsMobile([]);
-        setModalVisible(false);
-      };
+        let nextId = 1; // This will be incremented each time a new contact is added
 
-        
+       
       const filteredContacts = contactsMobile.filter((contact) =>
       (contact.name && (contact.phoneNumbers && contact.phoneNumbers.length > 0 || contact.emails && contact.emails.length > 0)) && contact.name.toLowerCase().includes(searchTermMobile.toLowerCase())
     );
@@ -834,11 +832,11 @@ export default function App() {
 
       <ScrollView style={styles.container}>
       <View style={styles.section}>
-        <Text style={styles.title}>Your Bundl Details</Text>
-        <Text style={styles.subtitle}>This information will be displayed publicly so be careful what you share.</Text>
+        <Text style={styles.title}>Your Bundl Gift</Text>
+        <Text style={styles.subtitle}>Write out the recipient of the gift, the people who will contribute to the gift, and the message you will send to the contributors.</Text>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Your Bundl Recipient's Name</Text>
+          <Text style={styles.label}>Recipient's full name</Text>
           <TextInput
             style={styles.input}
             value={recipientFullName}
@@ -875,33 +873,33 @@ export default function App() {
             <Button title="Close" onPress={() => setModalVisible(false)} color="white" />
           </View>
         </Modal>
-      <Button title={`View Contributor List (${tableData.length})`} onPress={() => setModalVisible(true)} />
-  
       <GestureHandlerRootView style={{flex: 1}}>
-  <FlatList
-    data={tableData}
-    renderItem={({ item }) => (
-      <Swipeable renderRightActions={(progress, dragX) => {
-        const trans = dragX.interpolate({
-          inputRange: [0, 50, 100, 101],
-          outputRange: [-20, 0, 0, 1],
-        });
-        return (
-          <TouchableOpacity onPress={() => handleDeleteContact(item)}>
-            <Animated.View style={{ flex: 1, backgroundColor: 'red', justifyContent: 'center', transform: [{ translateX: trans }] }}>
-              <Text style={{ color: 'white', paddingHorizontal: 10 }}>Delete</Text>
-            </Animated.View>
-          </TouchableOpacity>
-        );
-      }}>
-        <View>
-          <Text>{item.name}</Text>
-          <Text>{item.phoneNumber}</Text>
-        </View>
-      </Swipeable>
-    )}
-  />
-</GestureHandlerRootView>
+          <FlatList
+            data={tableData}
+            renderItem={({ item }) => (
+              <Swipeable renderRightActions={(progress, dragX) => {
+                const trans = dragX.interpolate({
+                  inputRange: [0, 50, 100, 101],
+                  outputRange: [-20, 0, 0, 1],
+                });
+                return (
+                  <TouchableOpacity onPress={() => handleDeleteContact(item)}>
+                    <Animated.View style={{ flex: 1, backgroundColor: 'red', justifyContent: 'center', transform: [{ translateX: trans }] }}>
+                      <Text style={{ color: 'white', paddingHorizontal: 10 }}>Delete</Text>
+                    </Animated.View>
+                  </TouchableOpacity>
+                );
+              }}>
+                <View style={styles.itemContainer}>
+                  <Text>{item.name}</Text>
+                  <Text>{item.phoneNumber}</Text>
+                </View>
+              </Swipeable>
+            )}
+          />
+        </GestureHandlerRootView>
+
+
 
       {/* <View style={styles.tableContainer}>
         <Table borderStyle={{ borderWidth: 1, borderColor: '#C1C0B9' }}>
@@ -947,15 +945,6 @@ export default function App() {
         </Modal>
       )}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Upload CSV</Text>
-        <Text style={styles.cardText}>
-          Click to upload your CSV file with your contributors information here:
-        </Text>
-        {/* You'll need to implement your own file upload component */}
-        {csvUploaded && <Button title="Add to Contributor List" onPress={addtoList} />}
-        <Button title="Download CSV template" onPress={handleDownloadCSV} />
-      </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Pull Contacts from Gmail</Text>
@@ -1072,6 +1061,17 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  itemContainer: {
+    padding: 10,
+    marginBottom: 10,
+    backgroundColor: 'transparent', 
+    borderRadius: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 1,
+    elevation: 3,
   },
   textarea: {
     height: 80,
