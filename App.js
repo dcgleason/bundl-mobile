@@ -1,57 +1,47 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Button, ScrollView, TouchableOpacity, FlatList, Switch, Animated} from 'react-native';
+import { View, Text, StyleSheet, TextInput, Button, ScrollView, TouchableOpacity, FlatList, Switch, Animated, Image } from 'react-native';
 import Modal from 'react-native-modal'; // or any other library you prefer
 import { Table, Row, Rows } from 'react-native-table-component';
 import { Picker } from '@react-native-picker/picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
-import * as Google from 'expo-auth-session/providers/google';
 import * as Contacts from 'expo-contacts';
 import { Swipeable } from 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Google from "expo-auth-session/providers/google";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from 'expo-linking';
+const { makeRedirectUri } = AuthSession;
 
-
+ WebBrowser.maybeCompleteAuthSession();
 
 export default function App() {
 
         const [message, setMessage] = useState("We are creating a book of supportive letters and nice pictures (or 'Bundl') for Dan G. It will only take you a minute to write and submit your letter. It should make for an unforgettable gift that shares our collective love and appreciation. Don't be the last to submit!");
         const [parsedData, setParsedData] = useState([]);
-        const [tableRows, setTableRows] = useState([]);
         const [userID, setUserID] = useState(null);
         const [isModalVisible, setIsModalVisible] = useState(false);
         const [notes, setNotes] = useState("");
         const [submitted, setSubmitted] = useState("");
-        const [newStudent, setNewStudent] = useState(null);
+
         const [pictureSubmitted, setPictureSubmitted ] = useState(false);
         const [isTableModalVisible, setIsTableModalVisible] = useState(false);
-        const [csvUploaded, setCsvUploaded] = useState(false);
-        const [hover, setHover] = useState(false);
-        const [emailModalVisible, setEmailModalVisible] = useState(false);
+
         const [emailBody, setEmailBody] = useState('');
         const [emailSubject, setEmailSubject] = useState("Contribute please - 3 days left!");
         const [emailRecipients, setEmailRecipients] = useState([]);
         const [values, setValues] = useState([]);
-        const [modalData, setModalData] = useState("");
+  
         const [ submission, setSubmission ] = useState("");
-        const [openGmail, setOpenGmail] = useState(false)
-        const [ gmailContacts, setGmailContacts ] = useState([{}]);
-        const [contacts, setContacts] = useState([]);
-        const [showModal, setShowModal] = useState(false);
+
         const [name, setName] = useState('');
         const [email, setEmail] = useState('');
         const [layout, setLayout] = useState('');
         const [msg, setMsg] = useState('');
-        const [isAuthenticated, setIsAuthenticated] = useState(false);
-        const [lastEmailSent, setLastEmailSent] = useState(null);
-        const [showSuccessModal, setShowSuccessModal] = useState(false);
-        const [isEditing, setIsEditing] = useState(false);
-        const [editingStudent, setEditingStudent] = useState(null);
-        const [pictureUrl, setPictureUrl] = useState(null);
-        const [viewPicture, setViewPicture] = useState(false);
+
         const [dataSource, setDataSource] = useState([]);
-        const [isSendingEmail, setIsSendingEmail] = useState(false);
-        const [isPromptModalVisible, setIsPromptModalVisible] = useState(false);
+
         const [prompts, setPrompts] = useState([
           "How has Jimmy affected your life?",
           "What do you love about Jimmy?",
@@ -60,7 +50,6 @@ export default function App() {
           "What do you wish for Jimmy's future?"
         ]);
         const [longMessage, setLongMessage] = useState('');
-        const [token, setToken] = useState(null);
         const [modalIsOpen, setModalIsOpen] = useState(false);
 
         const [userData, setUserData] = useState(null);
@@ -69,7 +58,6 @@ export default function App() {
         const [recipientlastName, setRecipientLastName] = useState("");
         const [isModalOpen, setIsModalOpen] = useState(false);
         const [googleContacts, setGoogleContacts] = useState([]);
-        const [contactCount, setContactCount] = useState(0); // Initialize to 0 or the initial number of contacts
         const [ text, setText] = useState("Join us in creating a 'Bundl' of loving letters & pics for Dan G. It's a quick, fun way to share our support and appreciation. Look out for an email from dan@givebundl.com with instructions. Don't miss out!");
         const [updateLocalStorageFunction, setUpdateLocalStorageFunction] = useState(() => () => {});
 
@@ -79,55 +67,61 @@ export default function App() {
         const [selectedContactsMobile, setSelectedContactsMobile] = useState([]);
         const [tableData, setTableData] = useState([]);
 
-        const [tableHead, setTableHead] = useState(['Name', 'Phone Number', 'SMS']);
+        const [userInfo, setUserInfo] = useState(null);
+        const [token, setToken] = useState("");
+        const [request, response, promptAsync] = Google.useAuthRequest({
+          androidClientId: "764289968872-54s7r83tcdah8apinurbj1afh3l0f92u.apps.googleusercontent.com",
+          iosClientId: "764289968872-8spc0amg0j9n4lqjs0rr99s75dmmkpc7.apps.googleusercontent.com",
+          webClientId: "764289968872-tdema5ev8sf7djdjlp6a8is5k5mjrf5t.apps.googleusercontent.com",
+          redirectUri: makeRedirectUri({
+            native: 'https://yay-api.herokuapp.com/mobile/oauth2callback',
+            useProxy: true,
+          }),
+        });
 
 
 
-        const columns = [
-          {
-            key: "1",
-            title: "ID",
-            render: (_, __, index) => index + 1,
-          },
-          {
-            key: "2",
-            title: "Name",
-            dataIndex: "name",
-          },
-          {
-            key: "3",
-            title: "Email",
-            dataIndex: "email",
-          },
-          {
-            key: "4",
-            title: "SMS",
-            dataIndex: "sms",
-          },
-          {
-            key: "9",
-            title: "Actions",
-            render: (record) => {
-              return (
-                <>
-                  <EditOutlined
-                    onClick={() => {
-                      onEditStudent(record);
-                    }}
-                  />
-                  <DeleteOutlined
-                    onClick={() => {
-                      onDeleteStudent(record);
-                    }}
-                    style={{ color: "red", marginLeft: 12 }}
-                  />
-                </>
-              );
-            },
-          },
-        ];
-          
-
+        useEffect(() => {
+          handleEffect();
+        }, [response, token]);
+      
+        async function handleEffect() {
+          const user = await getLocalUser();
+          console.log("user", user);
+          if (!user) {
+            if (response?.type === "success") {
+               setToken(response.authentication.accessToken);
+              getUserInfo(response.authentication.accessToken);
+            }
+          } else {
+            setUserInfo(user);
+            console.log("loaded locally");
+          }
+        }
+      
+        const getLocalUser = async () => {
+          const data = await AsyncStorage.getItem("@user");
+          if (!data) return null;
+          return JSON.parse(data);
+        };
+      
+        const getUserInfo = async (token) => {
+          if (!token) return;
+          try {
+            const response = await fetch(
+              "https://www.googleapis.com/userinfo/v2/me",
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            );
+      
+            const user = await response.json();
+            await AsyncStorage.setItem("@user", JSON.stringify(user));
+            setUserInfo(user);
+          } catch (error) {
+            // Add your own error handler here
+          }
+        };
           const showTableModal = () => {
             setIsTableModalVisible(true);
           };
@@ -209,19 +203,6 @@ export default function App() {
         setUpdateLocalStorageFunction(() => updateLocalStorage);
       }, []);
 
-      // useEffect(() => {
-      // if (typeof window !== 'undefined') {
-      //   const storedCsvData =  AsyncStorage.getItem('csvData');
-
-      //   if (storedCsvData) {
-      //     const parsedData = JSON.parse(storedCsvData);
-      //     console.log("parsed Data =", parsedData);
-      //     setParsedData(parsedData);
-      //     setDataSource(parsedData); // Set the parsed data to the dataSource state
-      //     setContactCount(parsedData.length); // Set the contact count to the length of the dataSource
-      //   }
-      // }
-      // }, []);
 
 
       // In your component's useEffect hook
@@ -285,49 +266,24 @@ export default function App() {
       setIsModalOpen(false);
       };
 
-      async function signInWithGoogle() {
+      async function fetchGoogleContacts(userInfo) {
         try {
-          const result = await Google.logInAsync({
-            androidClientId: '764289968872-54s7r83tcdah8apinurbj1afh3l0f92u.apps.googleusercontent.com',
-            iosClientId: '764289968872-8spc0amg0j9n4lqjs0rr99s75dmmkpc7.apps.googleusercontent.com',
-            scopes: ['profile', 'email'],
-          });
-
-          if (result.type === 'success') {
-            // Handle successful authentication here
-            console.log(result.params);
-            AsyncStorage.setItem('auth', JSON.stringify(result.params));
-            return result.accessToken;
-          } else {
-            // Handle failed authentication here
-            console.log(result);
-            return { cancelled: true };
-          }
-        } catch (error) {
-          console.error("error in auth" + error);
-        }
-      }
-
-
-      async function fetchGoogleContacts() {
-        try {
-          const auth = await AsyncStorage.getItem('auth');
-          if (!auth) {
-            console.error('Auth token not found');
+          if (!userInfo) {
+            console.error('User info not found');
             return;
           }
-
-          const tokens = JSON.parse(auth);
+      
+          const tokens = userInfo.access_token;
           const response = await fetch('https://yay-api.herokuapp.com/mobile/getPeople', {
             headers: {
               'Authorization': `Bearer ${tokens}`,
             },
           });
-
+      
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
-
+      
           const contacts = await response.json();
           setGoogleContacts(contacts);
           console.log('Google Contacts:', contacts); // Log the contacts
@@ -336,6 +292,7 @@ export default function App() {
           console.error('Failed to fetch Google contacts:', error);
         }
       }
+      
 
         function onSendSMS(time, recipient, gifter, to) {
           const url = 'https://yay-api.herokuapp.com/sms/sendSMS';
@@ -414,37 +371,7 @@ export default function App() {
           }
         };
 
-        const handleModalClose = () => {
-          setShowModal(false);
-        };
-
-        const handleModalOpen = (data) => {
-          setModalData(data);
-          console.log("data is", data)
-          setShowModal(true);
-        };
-
-        const displaySubmission = (data) => {
-          if (!data || !data.submission) {
-            return "No submission available";
-          }
-        
-          return (
-            <div>
-              <p>{data.submission}</p>
-            </div>
-          );
-        };
-
-        const handleViewPicture = (record) => {
-          setPictureUrl(record.img_file);
-          setViewPicture(true)
-        };
-        
-        const handleClosePictureModal = () => {
-          setPictureUrl(null);
-          setViewPicture(false);
-        };
+  
         const addtoList = async () => {
           let objects = [];
         
@@ -477,75 +404,7 @@ export default function App() {
           setContactCount(prevCount => prevCount + objects.length);
         };
         
-          
-        const handlePromptOk = async () => {
-          const token = AsyncStorage.getItem('token');
-          const userID = jwt_decode(token).userId;
-          const url = `https://yay-api.herokuapp.com/users/${userID}/prompts`;
-        
-          try {
-            const response = await fetch(url, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ prompts, longMessage }),
-            });
-        
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-        
-            console.log('Prompts updated on the server successfully');
-            setIsPromptModalVisible(false);
-          } catch (error) {
-            console.error('Failed to update prompts on the server:', error);
-          }
-        };
-
-        const handleDownloadCSV = () => {
-          window.open('https://docs.google.com/spreadsheets/d/1_fXj2aWK8dXI-GgjzuObLC0crXYx7HpVGTTaQZmdj7g/edit?usp=sharing', '_blank');
-        }
-
-        const handleHoverOn = () => {
-          setHover(true);
-        }
-        
-      const handleHoverOff = () => {
-          setHover(false);
-        }
-        
-        const onAddStudent = () => {
-          setIsModalVisible(true);
-        
-          const newStudent = {
-            id: dataSource[dataSource.length - 1].id + 1,
-            name: name,
-            email: email,
-            layout: layout? layout : 1,
-            msg: msg,
-          };
-        
-          // Make a POST request to your API endpoint
-          fetch(`https://yay-api.herokuapp.com/book/${userID}/message`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(newStudent),
-          })
-          .then(response => response.json())
-          .then(data => {
-            console.log('Success:', data);
-            // Update the local state only after the new student has been added to the database
-            setDataSource((pre) => {
-              return [...pre, newStudent];
-            });
-          })
-          .catch((error) => {
-            console.error('Error:', error);
-          });
-        };
+     
         const handleSelectContact = (contact) => {
           const phoneNumber = contact.phoneNumbers ? contact.phoneNumbers[0].number : '';
           const contactWithPhoneNumber = { ...contact, phoneNumber };
@@ -648,56 +507,6 @@ export default function App() {
         };
         
         
-        const onDeleteStudent = (record) => {
-          console.log('delete record.uuid = '+ record.uuid)
-          Modal.confirm({
-            title: "Are you sure, you want to delete this name from your list?",
-            okText: "Yes",
-            okType: "danger",
-            onOk: async () => {
-              setDataSource((pre) => {
-                return pre.filter((student) => student.id !== record.id);
-              });
-
-              // Decrement the contact count
-          setContactCount(prevCount => prevCount - 1);
-        
-              console.log('Student deleted from the server successfully');
-            },
-          });
-        };
-        const resetEditing = () => {
-          setIsEditing(false);
-          setEditingStudent(null);
-        };
-
-        const openPrompts = () => {
-          setIsPromptModalVisible(true);
-        };
-
-
-        const handlePromptCancel = () => {
-          setIsPromptModalVisible(false);
-        };
-
-        const handleRecipientOk = async () => {
-          const response = await fetch(`https://yay-api.herokuapp.com/users/${userID}/recipient`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              recipientFullName: `${firstName} ${lastName}`,
-              recipientFirstName: firstName,
-            }),
-          });
-
-          if (response.ok) {
-            setModalIsOpen(false);
-          } else {
-            console.error('Failed to update recipient');
-          }
-        };
 
         const handleOk = async () => {
           setIsModalVisible(false);
@@ -948,8 +757,35 @@ export default function App() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Pull Contacts from Gmail</Text>
+ 
+        <View style={styles.container}>
+          {!userInfo ? (
+            <Button
+              title="Sign in with Google"
+              disabled={!request}
+              onPress={() => {
+                promptAsync();
+              }}
+            />
+          ) : (
+            <View style={styles.card}>
+              {userInfo?.picture && (
+                <Image source={{ uri: userInfo?.picture }} style={styles.image} />
+              )}
+              <Text style={styles.text}>Email: {userInfo.email}</Text>
+              <Text style={styles.text}>
+                Verified: {userInfo.verified_email ? "yes" : "no"}
+              </Text>
+              <Text style={styles.text}>Name: {userInfo.name}</Text>
+              <Button
+                title="Fetch Google Contacts"
+                onPress={() => fetchGoogleContacts(userInfo)}
+              />
+            </View>
+          )}
+        </View>
+
         <Button title="Get my Google contacts" onPress={fetchGoogleContacts} />
-        <Button title="Sign in for Google Contacts" onPress={signInWithGoogle} />
       </View>
 
 
