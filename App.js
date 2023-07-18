@@ -43,13 +43,6 @@ export default function App() {
 
         const [dataSource, setDataSource] = useState([]);
 
-        const [prompts, setPrompts] = useState([
-          "How has Jimmy affected your life?",
-          "What do you love about Jimmy?",
-          "What's your favorite memory with Jimmy?",
-          "How has Jimmy inspired you?",
-          "What do you wish for Jimmy's future?"
-        ]);
         const [longMessage, setLongMessage] = useState('');
         const [modalIsOpen, setModalIsOpen] = useState(false);
 
