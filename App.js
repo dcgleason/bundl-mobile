@@ -1,8 +1,6 @@
-import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Button, ScrollView, TouchableOpacity, FlatList, Switch, Animated, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Switch, Animated } from 'react-native';
 import Modal from 'react-native-modal'; // or any other library you prefer
-import { Table, Row, Rows } from 'react-native-table-component';
 import { Picker } from '@react-native-picker/picker';
 import * as AuthSession from 'expo-auth-session';
 import * as Contacts from 'expo-contacts';
@@ -12,6 +10,7 @@ import * as Google from "expo-auth-session/providers/google";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from 'expo-linking';
+
 const { makeRedirectUri } = AuthSession;
 
  WebBrowser.maybeCompleteAuthSession();
@@ -40,6 +39,8 @@ export default function App() {
         const [layout, setLayout] = useState('');
         const [msg, setMsg] = useState('');
 
+        const [physicalBook, setPhysicalBook] = useState(false);
+
         const [dataSource, setDataSource] = useState([]);
 
         const [prompts, setPrompts] = useState([
@@ -63,9 +64,12 @@ export default function App() {
 
         const [modalVisible, setModalVisible] = useState(false);
         const [searchTermMobile, setSearchTermMobile] = useState('');
+        const [searchTerm, setSearchTerm] = useState('');
         const [contactsMobile, setContactsMobile] = useState([]);
         const [selectedContactsMobile, setSelectedContactsMobile] = useState([]);
+          const [selectedContacts, setSelectedContacts] = useState([]);
         const [tableData, setTableData] = useState([]);
+        const [contactCount, setContactCount] = useState([]);
 
         const [userInfo, setUserInfo] = useState(null);
         const [token, setToken] = useState("");
@@ -73,31 +77,46 @@ export default function App() {
           androidClientId: "764289968872-54s7r83tcdah8apinurbj1afh3l0f92u.apps.googleusercontent.com",
           iosClientId: "764289968872-8spc0amg0j9n4lqjs0rr99s75dmmkpc7.apps.googleusercontent.com",
           webClientId: "764289968872-tdema5ev8sf7djdjlp6a8is5k5mjrf5t.apps.googleusercontent.com",
+          expoClientId: "764289968872-n5nrj6lbnv4vsc42mtso6u2mu1d7nsm5.apps.googleusercontent.com",
+          scopes: ["https://www.googleapis.com/auth/contacts.readonly"], 
           redirectUri: makeRedirectUri({
             native: 'https://yay-api.herokuapp.com/mobile/oauth2callback',
             useProxy: true,
           }),
         });
 
-
-
-        useEffect(() => {
-          handleEffect();
-        }, [response, token]);
+        const [prompt1, setPrompt1] = useState('');
+        const [prompt2, setPrompt2] = useState('');
+        const [prompt3, setPrompt3] = useState('');
       
-        async function handleEffect() {
-          const user = await getLocalUser();
-          console.log("user", user);
-          if (!user) {
-            if (response?.type === "success") {
-               setToken(response.authentication.accessToken);
-              getUserInfo(response.authentication.accessToken);
-            }
-          } else {
-            setUserInfo(user);
-            console.log("loaded locally");
-          }
-        }
+        const placeholderName = recipientFullName || 'your recipient';
+
+
+useEffect(() => {
+  if (response?.type === 'success') {
+    const { access_token } = response.params;
+
+    // The access token is available in access_token
+    console.log(access_token);
+
+    // Handle the effect
+    const handleEffect = async () => {
+      const user = await getLocalUser();
+      console.log("user", user);
+      if (!user) {
+        setToken(response.authentication.accessToken);
+        getUserInfo(response.authentication.accessToken);
+      } else {
+        setUserInfo(user);
+        console.log("loaded locally");
+      }
+    };
+
+    // Call the handleEffect function
+    handleEffect();
+  }
+}, [response, token]);
+
       
         const getLocalUser = async () => {
           const data = await AsyncStorage.getItem("@user");
@@ -150,25 +169,25 @@ export default function App() {
           
           const addContactToList = async (contact, index) => {
             const newContact = {
-              id: dataSource.length + index + 1, // This will increment the ID for each new contact
+              id: tableData.length + index + 1, // This will increment the ID for each new contact
               name: contact.names[0].displayName,
-              email: prioritizeEmail(contact.emailAddresses), // Use the prioritizeEmail function here
-              sms: '', // Changed "address" to "sms"
+              emailAddresses: [{ value: prioritizeEmail(contact.emailAddresses) }], // Use the prioritizeEmail function here
+              phoneNumber: '', // Changed "address" to "sms"
             };
           
-            // Check if a contact with the same name already exists in the dataSource
-            if (dataSource.some(existingContact => existingContact.name === newContact.name)) {
+            // Check if a contact with the same name already exists in the tableData
+            if (tableData.some(existingContact => existingContact.name === newContact.name)) {
               console.log(`A contact with the name ${newContact.name} already exists.`);
               return;
             }
           
-            // Add the new contact to the dataSource state
-            setDataSource(prevDataSource => [...prevDataSource, newContact]);
+            // Add the new contact to the tableData state
+            setTableData(prevTableData => [...prevTableData, newContact]);
           
             // Increment the contact count
             setContactCount(prevCount => prevCount + 1);
           };
-
+          
 
       const prioritizeEmail = (emailAddresses) => {
         if (!emailAddresses || emailAddresses.length === 0) return '';
@@ -187,9 +206,9 @@ export default function App() {
         return hasEmail && matchesSearchTerm;
       });
 
-      const handleSearch = event => {
-        setSearchTerm(event.target.value);
-      };
+    const handleSearch = (text) => {
+      setSearchTerm(text);
+    };
 
       useEffect(() => {
         // Define a function that updates localStorage
@@ -258,22 +277,24 @@ export default function App() {
         }
       });
       };
-      const addSelectedContactsToList = async () => {
-      for (let i = 0; i < selectedContacts.length; i++) {
-        await addContactToList(selectedContacts[i], i);
-      }
-      setSelectedContacts([]);
-      setIsModalOpen(false);
+    const addSelectedContactsToList = async () => {
+        for (let i = 0; i < selectedContacts.length; i++) {
+          await addContactToList(selectedContacts[i], i);
+        }
+        setSelectedContacts([]);
+        setIsModalOpen(false);
       };
 
-      async function fetchGoogleContacts(userInfo) {
+
+      async function fetchGoogleContacts(token) {
         try {
           if (!userInfo) {
             console.error('User info not found');
             return;
           }
       
-          const tokens = userInfo.access_token;
+          const tokens = token;
+          console.log('tokens = '+ tokens);
           const response = await fetch('https://yay-api.herokuapp.com/mobile/getPeople', {
             headers: {
               'Authorization': `Bearer ${tokens}`,
@@ -336,7 +357,7 @@ export default function App() {
         };
         
 
-        const closeModal = () => {
+        const closeModal = () => {x
           setOpenGmail(false);
         };
 
@@ -416,7 +437,7 @@ export default function App() {
           }
         };
         
-        const handleAddToList = () => {
+        const handleAddToList = () => { // phone contacts
           setTableData(prev => [...prev, ...selectedContactsMobile]);
           setSelectedContactsMobile([]);
           setModalVisible(false);
@@ -427,8 +448,6 @@ export default function App() {
           });
         };
         
-        let nextId = 1; // This will be incremented each time a new contact is added
-
        
       const filteredContacts = contactsMobile.filter((contact) =>
       (contact.name && (contact.phoneNumbers && contact.phoneNumbers.length > 0 || contact.emails && contact.emails.length > 0)) && contact.name.toLowerCase().includes(searchTermMobile.toLowerCase())
@@ -526,6 +545,26 @@ export default function App() {
         
         }
         
+        const prioritizeEmailGoogle = (emailAddresses) => {
+          if (!emailAddresses || emailAddresses.length === 0) {
+            return 'No email';
+          }
+
+          const priorityDomains = ['@outlook.com', '@gmail.com', '@hotmail.com'];
+          
+          // Sort email addresses based on the priority of the domain
+          const sortedEmailAddresses = emailAddresses.sort((a, b) => {
+            const aDomain = a.value.split('@')[1];
+            const bDomain = b.value.split('@')[1];
+            const aPriority = priorityDomains.includes(aDomain) ? 1 : 0;
+            const bPriority = priorityDomains.includes(bDomain) ? 1 : 0;
+            return bPriority - aPriority;
+          });
+
+          // Return the first email address in the sorted list
+          return sortedEmailAddresses[0].value;
+        };
+
 
         const handleCancel = () => {
           setIsModalVisible(false);
@@ -551,71 +590,28 @@ export default function App() {
             }
           }
 
-      async function submitAndSendWelcomeMessage(contributors) {
-      // Assume that contributors is an array of objects, where each object has an email and phone property
+          async function submitAndSendWelcomeMessage(contributors) {
+            // Assume that contributors is an array of objects, where each object has an email and phone property
+          
+            // Step 2: Send email to all contributors
+            const emails = contributors.filter(contributor => contributor.email).map(contributor => contributor.email);
+            if (emails.length > 0) {
+              const emailUrl = `mailto:${emails.join(',')}?subject=Welcome to the project!&body=Thank you for contributing to our project. We appreciate your support!`;
+              Linking.openURL(emailUrl).catch(err => console.error('Failed to send email:', err));
+            }
+          
+            // Step 3: Send text message to all contributors
+            for (const contributor of contributors) {
+              if (contributor.phone) {
+                const smsUrl = `sms:${contributor.phone}?body=Thank you for contributing to our project. We appreciate your support!`;
+                Linking.openURL(smsUrl).catch(err => console.error('Failed to send SMS:', err));
+              }
+            }
+          }
 
-      // Step 2: Send email to all contributors
-      const emailResponse = await fetch('https://www.givebundl.com/api/sendEmail', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Include the access token in the Authorization header
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          senderName: 'Your Name',
-          senderEmail: 'your-email@example.com',
-          emailSubject: 'Welcome to the project!',
-          emailBody: 'Thank you for contributing to our project. We appreciate your support!',
-          recipientEmails: contributors.map(contributor => contributor.email),
-        }),
-      });
-
-      if (!emailResponse.ok) {
-        throw new Error(`Failed to send email: ${emailResponse.status}`);
-      }
-
-      // Step 3: Send text message to all contributors
-      for (const contributor of contributors) {
-        const smsResponse = await fetch('https://www.givebundl.com/api/sendSMS', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // Include the necessary credentials, if any
-          },
-          body: JSON.stringify({
-            to: contributor.phone,
-            message: 'Thank you for contributing to our project. We appreciate your support!',
-          }),
-        });
-
-        if (!smsResponse.ok) {
-          throw new Error(`Failed to send SMS: ${smsResponse.status}`);
-        }
-      }
-
-      // Step 4: Send all contributors to the backend API
-      const bookResponse = await fetch('https://yay-api.herokuapp.com/book/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: userID, // The ID of the user
-          // Include any other necessary data
-        }),
-      });
-
-      if (!bookResponse.ok) {
-        throw new Error(`Failed to create book: ${bookResponse.status}`);
-      }
-
-      const book = await bookResponse.json();
-      console.log('Created book:', book);
-      }
 
   return (
-    <ScrollView style={{ padding: 32 }}>
+    <View style={{ padding: 32 }}  contentContainerStyle={{ alignItems: 'center' }} >
       <Modal isVisible={isModalVisible}>
         <View>
           <Text>Add a new contributor manually</Text>
@@ -634,12 +630,16 @@ export default function App() {
           <Text>Picture Upload</Text>
           <Text>Notes</Text>
           <TextInput placeholder="Notes" value={notes} onChangeText={(text) => setNotes(text)} />
-          <Button title="OK" onPress={handleOk} />
-          <Button title="Cancel" onPress={handleCancel} />
+          <TouchableOpacity style={styles.button} title="OK" onPress={handleOk}>
+            <Text>OK</Text>
+          </TouchableOpacity>
+          <TouchableOpacity  style={styles.button} title="Cancel" onPress={handleCancel}>
+            <Text>Cancel</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
 
-      <ScrollView style={styles.container}>
+      <FlatList style={styles.container}  contentContainerStyle={{ alignItems: 'center' }} >
       <View style={styles.section}>
         <Text style={styles.title}>Your Bundl Gift</Text>
         <Text style={styles.subtitle}>Write out the recipient of the gift, the people who will contribute to the gift, and the message you will send to the contributors.</Text>
@@ -650,11 +650,46 @@ export default function App() {
             style={styles.input}
             value={recipientFullName}
             onChangeText={setRecipientFullName}
-            placeholder="Eliza Irwin"
+            placeholder="Your recipient's full name"
           />
         </View>
 
-        <Button title="Get Contacts" onPress={getContacts} />
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Switch
+                  value={physicalBook}
+                  onValueChange={setPhysicalBook}
+                />
+                <Text>Make this Bundl e-book a physical Bundl book for $99</Text>
+          </View>
+
+          <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                value={prompt1}
+                onChangeText={setPrompt1}
+                placeholder={`1. What is your favorite thing about ${placeholderName}?`}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                value={prompt2}
+                onChangeText={setPrompt2}
+                placeholder={`2. What positive thing have you learned from ${placeholderName}?`}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                value={prompt3}
+                onChangeText={setPrompt3}
+                placeholder={`3. What is your favorite memory with ${placeholderName}?`}
+              />
+            </View>
+
+       
         <Modal isVisible={modalVisible}>
           <View style={{ flex: 1, backgroundColor: 'black' }}>
             <Text style={{ color: 'white', fontSize: 20 }}>Contact List:</Text>
@@ -667,6 +702,7 @@ export default function App() {
             />
             <FlatList
               data={filteredContacts}
+              contentContainerStyle={{ alignItems: 'center' }}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -678,98 +714,100 @@ export default function App() {
                 </View>
               )}
             />
-            <Button title="Add to list" onPress={handleAddToList} color="white" />
-            <Button title="Close" onPress={() => setModalVisible(false)} color="white" />
+            <TouchableOpacity style={styles.button} title="Add to list" onPress={handleAddToList} color="white" >
+               <Text style={styles.buttonText}>Add to list</Text>
+                </TouchableOpacity>
+            <TouchableOpacity style={styles.button} title="Close" onPress={() => setModalVisible(false)} color="white">
+               <Text style={styles.buttonText}>Close</Text>
+               </TouchableOpacity> 
           </View>
         </Modal>
-      <GestureHandlerRootView style={{flex: 1}}>
-          <FlatList
-            data={tableData}
-            renderItem={({ item }) => (
-              <Swipeable renderRightActions={(progress, dragX) => {
-                const trans = dragX.interpolate({
-                  inputRange: [0, 50, 100, 101],
-                  outputRange: [-20, 0, 0, 1],
-                });
+        <GestureHandlerRootView style={{flex: 1}}>
+              <FlatList
+                data={tableData}
+                renderItem={({ item }) => (
+                  <Swipeable renderRightActions={(progress, dragX) => {
+                    const trans = dragX.interpolate({
+                      inputRange: [0, 50, 100, 101],
+                      outputRange: [-20, 0, 0, 1],
+                    });
+                    return (
+                      <TouchableOpacity style={styles.button} onPress={() => handleDeleteContact(item)}>
+                        <Animated.View style={{ flex: 1, backgroundColor: 'red', justifyContent: 'center', transform: [{ translateX: trans }] }}>
+                          <Text style={{ color: 'white', paddingHorizontal: 10 }}>Delete</Text>
+                        </Animated.View>
+                      </TouchableOpacity>
+                    );
+                  }}>
+                    <View style={styles.itemContainer}>
+                    <Text>{item.name ? item.name : ''}</Text>
+                    <Text>{prioritizeEmail(item.emailAddresses)}</Text>
+                    <Text>{item.phoneNumber ? item.phoneNumber : ''}</Text>
+                    </View>
+                  </Swipeable>
+                )}
+        />
+      </GestureHandlerRootView>
+
+      {isModalOpen && (
+          <Modal isVisible={isModalOpen}>
+            <View style={{ height: '80%', width: '80%', backgroundColor: 'white' }}>
+              <TextInput placeholder="Search contacts..." onChangeText={handleSearch} />
+              {filteredContactsGoogle.map(contact => {
+                // Check if the contact has an email
+                const email = prioritizeEmailGoogle(contact.emailAddresses);
+                if (email == "No emaiml") {
+                  // If the contact doesn't have an email, don't render anything
+                  return null;
+                }
+
+                // If the contact has an email, render the contact
                 return (
-                  <TouchableOpacity onPress={() => handleDeleteContact(item)}>
-                    <Animated.View style={{ flex: 1, backgroundColor: 'red', justifyContent: 'center', transform: [{ translateX: trans }] }}>
-                      <Text style={{ color: 'white', paddingHorizontal: 10 }}>Delete</Text>
-                    </Animated.View>
-                  </TouchableOpacity>
+                  <View key={contact.resourceName} style={styles.contactContainer}>
+                    <Switch
+                      value={selectedContacts.includes(contact)}
+                      onValueChange={isChecked => handleContactSelect(contact, isChecked)}
+                    />
+                    <Text style={styles.contactText}>
+                      {contact.names && contact.names.length > 0 ? contact.names[0].displayName : 'Unnamed Contact'}
+                    </Text>
+                    <Text style={styles.contactText}>{email}</Text>
+                  </View>
                 );
-              }}>
-                <View style={styles.itemContainer}>
-                  <Text>{item.name}</Text>
-                  <Text>{item.phoneNumber}</Text>
-                </View>
-              </Swipeable>
-            )}
-          />
-        </GestureHandlerRootView>
+              })}
+              <TouchableOpacity  style={styles.button} title="Add to list" onPress={addSelectedContactsToList} >
+                <Text style={styles.buttonText}>Add to list</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.button} title="Cancel" onPress={() => setIsModalOpen(false)} >
+                <Text style={styles.buttonText}>Cancel</Text> 
+              </TouchableOpacity>
+            </View>
+          </Modal>
+        )}
 
 
 
-      {/* <View style={styles.tableContainer}>
-        <Table borderStyle={{ borderWidth: 1, borderColor: '#C1C0B9' }}>
-          <Row data={tableHead} style={styles.head} textStyle={styles.text} />
-          <Rows data={tableData.map((contact) => [contact.name, contact.phoneNumber, 'SMS'])} textStyle={styles.text} />
-        </Table>
-      </View> */}
-        {isModalOpen && (
-        <Modal isVisible={isModalOpen}>
-          <View>
-            <Text>Select a contact</Text>
-            <TextInput placeholder="Search contacts..." onChangeText={handleSearch} />
-            {filteredContactsGoogle.map(contact => (
-              <View key={contact.resourceName} style={styles.contactContainer}>
-                <CheckBox
-                  value={selectedContacts.includes(contact)}
-                  onValueChange={isChecked => handleContactSelect(contact, isChecked)}
-                />
-                <Text style={styles.contactText}>
-                  {contact.names && contact.names.length > 0 ? contact.names[0].displayName : 'Unnamed Contact'}
-                </Text>
-                <Text style={styles.contactText}>{prioritizeEmail(contact.emailAddresses)}</Text>
-              </View>
-            ))}
-            <Button title="Add to list" onPress={addSelectedContactsToList} />
-            <Button title="Cancel" onPress={() => setIsModalOpen(false)} />
-          </View>
-        </Modal>
-      )}
-
-    {isTableModalVisible && (
-        <Modal isVisible={isTableModalVisible}>
-          <View>
-            <Text>Contributor List ({dataSource.length})</Text>
-            <FlatList
-              data={dataSource}
-              renderItem={({ item }) => <Text>{item}</Text>}
-              keyExtractor={(item, index) => index.toString()}
-            />
-            <Button title="OK" onPress={handleTableModalOk} />
-            <Button title="Cancel" onPress={handleTableModalCancel} />
-          </View>
-        </Modal>
-      )}
-
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Pull Contacts from Gmail</Text>
+      <View style={styles.buttonContainer} >
+    
+         <TouchableOpacity style={styles.button} title="Get Contacts" onPress={getContacts}>
+          <Text style={styles.buttonText}>Get Your Contacts</Text>
+        </TouchableOpacity> 
  
         <View style={styles.container}>
           {!userInfo ? (
-            <Button
+            <TouchableOpacity
+              style={styles.button}
               title="Sign in with Google"
               disabled={!request}
               onPress={() => {
                 promptAsync();
               }}
-            />
-          ) : (
-            <View style={styles.card}>
-              {userInfo?.picture && (
+            >
+               <Text style={styles.buttonText}>Sign-in with Google</Text>
+            </TouchableOpacity>
+           ) : (
+            <View>
+              {/* {userInfo?.picture && (
                 <Image source={{ uri: userInfo?.picture }} style={styles.image} />
               )}
               <Text style={styles.text}>Email: {userInfo.email}</Text>
@@ -777,15 +815,18 @@ export default function App() {
                 Verified: {userInfo.verified_email ? "yes" : "no"}
               </Text>
               <Text style={styles.text}>Name: {userInfo.name}</Text>
-              <Button
+               */}
+              <TouchableOpacity
                 title="Fetch Google Contacts"
-                onPress={() => fetchGoogleContacts(userInfo)}
-              />
+                style={styles.button}
+                onPress={() => fetchGoogleContacts(response.params.access_token)}
+              >
+                <Text style={styles.buttonText}>Get your Google Contacts</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
 
-        <Button title="Get my Google contacts" onPress={fetchGoogleContacts} />
       </View>
 
 
@@ -801,17 +842,6 @@ export default function App() {
       </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Welcome Message</Text>
-          <TextInput
-            style={styles.textarea}
-            value={message}
-            onChangeText={setMessage}
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
           <Text style={styles.label}>Welcome Text Message (SMS)</Text>
           <TextInput
             style={styles.textarea}
@@ -823,18 +853,31 @@ export default function App() {
         </View>
 
         <View style={styles.buttonContainer}>
-          <Button title="Cancel" onPress={() => {}} />
-          <Button title="Send Welcome Messages (SMS and Email) to Contributor List" onPress={submitAndSendWelcomeMessage} />
+          <TouchableOpacity style={styles.button} title="Cancel" onPress={() => {}} >
+            <Text style={styles.buttonText}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.button} title="Send Welcome Messages (SMS and Email) to Contributor List" onPress={submitAndSendWelcomeMessage} >
+            <Text style={styles.buttonText}>Send Welcome Messages (SMS and Email) to Contributor List</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </ScrollView>
-    </ScrollView>
+    </FlatList>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     padding: 32,
+  },
+  buttonContainer: {
+    flex: 1,
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+    flexDirection: 'column', // stack buttons vertically
   },
   card: {
     marginTop: 16,
@@ -855,7 +898,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 20, // consistent margin for all sections
   },
   title: {
     fontSize: 20,
@@ -866,7 +909,7 @@ const styles = StyleSheet.create({
     color: 'gray',
   },
   inputContainer: {
-    marginTop: 16,
+    marginTop: 20, // consistent margin for all input containers
   },
   label: {
     fontSize: 16,
@@ -886,17 +929,21 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     padding: 8,
   },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
+  button: {
+    backgroundColor: '#FF7F7F', // light red
+    width: 200, // set a fixed width
+    paddingHorizontal: 10,
+    paddingVertical: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginBottom: 20, 
+    marginRight: 20, // consistent margin between buttons
+    marginLeft: 20, // consistent margin between buttons
+    marginTop: 20 // consistent margin for all buttons
   },
-  inputContainer: {
-    marginTop: 16,
-  },
-  label: {
+  buttonText: {
+    color: 'white',
     fontSize: 16,
-    fontWeight: 'bold',
   },
   itemContainer: {
     padding: 10,
@@ -908,13 +955,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 1,
     elevation: 3,
-  },
-  textarea: {
-    height: 80,
-    borderColor: 'gray',
-    borderWidth: 1,
-    borderRadius: 4,
-    padding: 8,
   },
   contactContainer: {
     flexDirection: 'row',
